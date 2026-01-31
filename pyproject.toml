@@ -1,0 +1,76 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "venue-recommendation-agent"
+version = "0.1.0"
+description = "Multi-agent venue recommendation system using FastMCP and Google Agent Development Kit (ADK)"
+requires-python = "==3.14.*"
+dependencies = [
+    "fastmcp",
+    "google-adk==1.23.0",
+    "google-genai",
+    "httpx",
+    "pydantic",
+    "pydantic-settings",
+    "python-dotenv",
+    "tenacity",
+]
+
+[project.scripts]
+mcp-server = "src.mcp_server.server:main"
+web-ui = "src.venue_recommendation_agent.agent:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "pytest-mock",
+    "black",
+    "ruff",
+    "pyright",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.pytest.ini_options]
+# Test discovery
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+testpaths = ["tests"]
+
+# Asyncio configuration
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+# Markers
+markers = [
+    "integration: Integration tests that require real API keys (deselect with '-m \"not integration\"')",
+]
+
+# Output options
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--showlocals",
+    "-v",
+    # Disable all warnings to reduce noise from third-party libraries
+    "--disable-warnings",
+]
+
+# Log configuration
+log_cli = false
+log_cli_level = "WARNING"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+
+[tool.pyright]
+include = ["src"]
+exclude = ["**/__pycache__", ".venv", "tests"]
+pythonVersion = "3.14"
+typeCheckingMode = "basic"
+reportMissingTypeStubs = false
