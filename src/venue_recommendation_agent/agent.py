@@ -77,7 +77,7 @@ app = App(
     # Compact events every 5 turns to reduce context size
     events_compaction_config=EventsCompactionConfig(
         compaction_interval=5,
-        overlap_size=1,
+        overlap_size=1, # Keep 1 previous turn for context
         summarizer=summarization_llm,
     ),
 )

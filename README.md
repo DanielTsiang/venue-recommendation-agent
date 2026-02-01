@@ -136,7 +136,7 @@ User (receives personalised recommendations only)
 - **Search Agent**: Queries Yelp API via MCP tool to find businesses
 - **Recommendation Agent**: Analyses results and provides ranked recommendations
 - **Data Flow**: Search Agent finds venues → Recommendation Agent ranks and explains choices → User sees final recommendations
-- **Events Compaction**: Summarises earlier conversation turns to enable longer conversations without hitting token limits, reducing cost and latency
+- **Events Compaction**: Summarises earlier conversation turns to enable longer conversations without hitting token limits. This saves costs, improves performance, and helps the agent stay focused on what's most important.
 
 ### Technology Stack
 
