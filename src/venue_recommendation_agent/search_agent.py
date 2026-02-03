@@ -5,6 +5,7 @@ import logging
 from google.adk.agents import LlmAgent
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.agents.llm_agent import LlmResponse
+from google.adk.tools.preload_memory_tool import preload_memory_tool
 from google.genai.types import GenerateContentConfig, HttpOptions, HttpRetryOptions
 
 from src.config import settings
@@ -29,7 +30,7 @@ def create_search_agent(mcp_tools: list | None = None) -> LlmAgent:
     Returns:
         Configured LlmAgent for search tasks
     """
-    logger.info(f"Creating Google ADK SearchAgent with model: {settings.gemini_model}")
+    logger.info(f"Creating Search Agent with model: {settings.gemini_model}")
 
     # Configure retry options for Google API calls
     retry_options = HttpRetryOptions(
@@ -59,18 +60,24 @@ def create_search_agent(mcp_tools: list | None = None) -> LlmAgent:
         http_options=http_options,
     )
 
-    # Create Google ADK LlmAgent
+    # Combine memory tool with MCP tools
+    tools = [preload_memory_tool]
+    if mcp_tools:
+        tools.extend(mcp_tools)
+
+    # Create Search Agent
     agent = LlmAgent(
         name="search_agent",
         description="Searches for businesses on Yelp based on user queries",
         model=settings.gemini_model,
         instruction=SEARCH_AGENT_PROMPT,
-        tools=mcp_tools or [],
+        tools=tools,
         generate_content_config=gen_config,
         after_model_callback=suppress_text_output_callback,  # Manually saves state and suppresses UI
+        output_key=SEARCH_RESULTS,
     )
 
-    logger.info("Google ADK SearchAgent created with after_model_callback for text suppression")
+    logger.info("Search Agent created successfully")
     return agent
 
 
@@ -103,7 +110,9 @@ def suppress_text_output_callback(
         # Note: Full tool responses remain in conversation history automatically
         combined_text = "\n".join(text_parts)
         callback_context.state.update({SEARCH_RESULTS: combined_text})
-        logger.debug(f"Saved {len(combined_text)} characters to state[{SEARCH_RESULTS}]")
+        logger.debug(
+            f"Saved {len(combined_text)} characters to state[{SEARCH_RESULTS}]"
+        )
 
         # Filter out text parts from response (keep only function calls)
         filtered_parts = [part for part in llm_response.content.parts if not part.text]

@@ -7,18 +7,23 @@ MCP server auto-launches as subprocess for Yelp API access.
 import logging
 import os
 import sys
+from pathlib import Path
 
+import uvicorn
 from google.adk.agents import SequentialAgent
+from google.adk.agents.callback_context import CallbackContext
 from google.adk.apps import App
 from google.adk.apps.app import EventsCompactionConfig
 from google.adk.apps.llm_event_summarizer import LlmEventSummarizer
+from google.adk.cli.fast_api import get_fast_api_app
 from google.adk.models import Gemini
-from google.adk.tools.mcp_tool import McpToolset
-from google.adk.tools.mcp_tool import StdioConnectionParams
+from google.adk.tools.mcp_tool import McpToolset, StdioConnectionParams
 from mcp.client.stdio import StdioServerParameters
 
 from src.config import settings
-from src.venue_recommendation_agent.recommendation_agent import create_recommendation_agent
+from src.venue_recommendation_agent.recommendation_agent import (
+    create_recommendation_agent,
+)
 from src.venue_recommendation_agent.search_agent import create_search_agent
 
 logging.basicConfig(
@@ -49,6 +54,35 @@ def create_mcp_toolset() -> McpToolset:
     return McpToolset(connection_params=connection_params)
 
 
+async def auto_save_to_memory(callback_context: CallbackContext) -> None:
+    """Automatically save session to memory after each agent turn.
+
+    This callback is invoked after the root SequentialAgent completes,
+    saving the full conversation to memory for future recall via PreloadMemoryTool.
+
+    Args:
+        callback_context: Context providing access to session and memory service.
+    """
+    try:
+        # Log session details
+        session = callback_context._invocation_context.session
+        memory_key = f"{session.app_name}/{session.user_id}"
+        logger.debug(
+            f"Saving to memory - memory_key: {memory_key}, session_id: {session.id}"
+        )
+        await callback_context.add_session_to_memory()
+
+        # Log what's stored in memory
+        memory_service = callback_context._invocation_context.memory_service
+        if hasattr(memory_service, "_session_events"):
+            stored_keys = list(memory_service._session_events.keys())
+            logger.debug(f"Memory now contains keys: {stored_keys}")
+
+        logger.info("Session saved to memory successfully")
+    except ValueError as e:
+        logger.warning(f"Could not save to memory: {e}")
+
+
 _mcp_toolset = create_mcp_toolset()
 
 _search_agent = create_search_agent(mcp_tools=[_mcp_toolset])
@@ -57,8 +91,10 @@ _recommendation_agent = create_recommendation_agent()
 # SequentialAgent orchestrates two-phase workflow:
 # 1. Search Agent: Queries Yelp API, stores results in state via after_model_callback
 #    - Text output suppressed (only tool calls visible in UI)
+#    - PreloadMemoryTool retrieves relevant past conversations
 # 2. Recommendation Agent: Analyzes stored results, provides final recommendations
 #    - Receives text summary from state + full tool responses from conversation history
+# 3. After completion: auto_save_to_memory saves session for future recall
 root_agent = SequentialAgent(
     name="venue_recommendation_workflow",
     description="Sequential workflow for finding and recommending venues",
@@ -66,6 +102,7 @@ root_agent = SequentialAgent(
         _search_agent,
         _recommendation_agent,
     ],
+    after_agent_callback=auto_save_to_memory,
 )
 
 # Summariser for condensing earlier conversation turns
@@ -77,7 +114,7 @@ app = App(
     # Compact events every 5 turns to reduce context size
     events_compaction_config=EventsCompactionConfig(
         compaction_interval=5,
-        overlap_size=1, # Keep 1 previous turn for context
+        overlap_size=1,  # Keep 1 previous turn for context
         summarizer=summarization_llm,
     ),
 )
@@ -89,12 +126,6 @@ def main(agents_dir: str | None = None):
     Args:
         agents_dir: Path to agents directory (defaults to src/)
     """
-    import sys
-    from pathlib import Path
-
-    import uvicorn
-    from google.adk.cli.fast_api import get_fast_api_app
-
     print("=" * 80)
     print("🏪 Venue Recommendation Agent - Google ADK Web UI")
     print("=" * 80)

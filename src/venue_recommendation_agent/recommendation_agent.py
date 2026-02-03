@@ -22,9 +22,7 @@ def create_recommendation_agent() -> LlmAgent:
     Returns:
         Configured LlmAgent for recommendation tasks
     """
-    logger.info(
-        f"Creating Google ADK RecommendationAgent with model: {settings.gemini_model}"
-    )
+    logger.info(f"Creating Recommendation Agent with model: {settings.gemini_model}")
 
     # Configure retry options for Google API calls
     retry_options = HttpRetryOptions(
@@ -62,5 +60,5 @@ def create_recommendation_agent() -> LlmAgent:
         generate_content_config=gen_config,
     )
 
-    logger.info("Google ADK RecommendationAgent created successfully")
+    logger.info("Recommendation Agent created successfully")
     return agent

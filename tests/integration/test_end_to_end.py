@@ -10,12 +10,14 @@ from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
 from src.config import Settings
-from src.venue_recommendation_agent.agent import create_mcp_toolset
-from src.venue_recommendation_agent.recommendation_agent import create_recommendation_agent
-from src.venue_recommendation_agent.search_agent import create_search_agent
 from src.mcp_server.server import search_yelp_businesses as _search_tool
 from src.mcp_server.yelp.client import YelpClient
 from src.mcp_server.yelp.models import SearchResponse
+from src.venue_recommendation_agent.agent import create_mcp_toolset
+from src.venue_recommendation_agent.recommendation_agent import (
+    create_recommendation_agent,
+)
+from src.venue_recommendation_agent.search_agent import create_search_agent
 
 
 @pytest.fixture(scope="module")
@@ -432,7 +434,10 @@ async def test_recommendation_agent_analyses_business_data(check_api_keys):
 
     # User asks for recommendations
     user_message = types.Content(
-        role="user", parts=[types.Part(text="Please analyse these and provide your recommendations.")]
+        role="user",
+        parts=[
+            types.Part(text="Please analyse these and provide your recommendations.")
+        ],
     )
 
     # Populate state with search results (simulating Search Agent's output_key)
@@ -441,7 +446,10 @@ async def test_recommendation_agent_analyses_business_data(check_api_keys):
     # When: Recommendation agent analyses the data
     recommendations = []
     async for event in runner.run_async(
-        user_id=user_id, session_id=session_id, new_message=user_message, state_delta=state_delta
+        user_id=user_id,
+        session_id=session_id,
+        new_message=user_message,
+        state_delta=state_delta,
     ):
         if hasattr(event, "content") and event.content and event.content.parts:
             for part in event.content.parts:

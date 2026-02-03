@@ -27,6 +27,7 @@ tests/
 ├── test_search_agent.py         # Search agent
 ├── test_recommendation_agent.py # Recommendation agent
 ├── test_mcp_server.py           # MCP server tools
+├── test_memory.py               # Memory functionality
 ├── integration/
 │   └── test_end_to_end.py      # End-to-end with real APIs
 ├── conftest.py                  # Shared fixtures

@@ -9,7 +9,7 @@ from src.mcp_server.exceptions import (
     YelpRateLimitError,
 )
 from src.mcp_server.yelp.client import YelpClient
-from src.mcp_server.yelp.models import Business, SearchResponse
+from src.mcp_server.yelp.models import SearchResponse
 
 
 @pytest.fixture

@@ -2,8 +2,11 @@
 
 import pytest
 from google.adk.agents import LlmAgent
+from google.adk.tools.preload_memory_tool import preload_memory_tool
 
-from src.venue_recommendation_agent.recommendation_agent import create_recommendation_agent
+from src.venue_recommendation_agent.recommendation_agent import (
+    create_recommendation_agent,
+)
 from src.venue_recommendation_agent.search_agent import create_search_agent
 
 
@@ -137,13 +140,14 @@ class TestAgentsCommon:
     ):
         """Test create agent accepts MCP tools (search agent only)."""
         # Given: MCP tools
-        mock_tools = [mocker.Mock()]
+        mock_tool = mocker.Mock()
 
         # When: Agent is created with tools
         if agent_name == "search_agent":
-            agent = create_fn(mcp_tools=mock_tools)
-            # Then: Search agent should have tools assigned
-            assert agent.tools == mock_tools
+            agent = create_fn(mcp_tools=[mock_tool])
+            # Then: Search agent should have preload_memory_tool first, then MCP tools
+            assert agent.tools[0] == preload_memory_tool
+            assert agent.tools[1] == mock_tool
         else:
             # Recommendation agent doesn't accept tools
             agent = create_fn()
@@ -159,12 +163,12 @@ class TestAgentsCommon:
         expected_top_p,
         expected_tokens,
     ):
-        """Test create agent works without tools."""
-        # When: Agent is created without tools
+        """Test create agent works without MCP tools."""
+        # When: Agent is created without MCP tools
         if agent_name == "search_agent":
             agent = create_fn(mcp_tools=None)
-            # Then: Should have empty tools list
-            assert agent.tools == []
+            # Then: Should have only preload_memory_tool (no MCP tools)
+            assert agent.tools == [preload_memory_tool]
         else:
             # Recommendation agent doesn't accept mcp_tools parameter
             agent = create_fn()

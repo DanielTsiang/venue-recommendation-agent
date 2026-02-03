@@ -1,7 +1,5 @@
 """Unit tests for Search Agent."""
 
-import pytest
-
 from src.venue_recommendation_agent.search_agent import (
     SEARCH_RESULTS,
     create_search_agent,
@@ -20,8 +18,8 @@ class TestSearchAgent:
             create_search_agent()
 
         # Then: Should log creation messages
-        assert "Creating Google ADK SearchAgent" in caplog.text
-        assert "after_model_callback for text suppression" in caplog.text
+        assert "Creating Search Agent" in caplog.text
+        assert "Search Agent created successfully" in caplog.text
 
     def test_create_search_agent_has_callback(self):
         """Test create_search_agent sets after_model_callback."""

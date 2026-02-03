@@ -8,6 +8,7 @@ A Google ADK-powered multi-agent AI system that provides intelligent venue recom
 - **Multi-criteria analysis** - Price, ratings, distance, ambiance, cuisine type
 - **Intelligent reasoning** - Context-aware recommendations with detailed rationale
 - **Multi-agent architecture** - Search Agent (retrieval) → Recommendation Agent (analysis)
+- **Memory persistence** - Remembers past searches for contextual recommendations
 - **Real-time data** - Live Yelp business information
 - **MCP Protocol** - FastMCP server connects ADK agents to Yelp API
 
@@ -15,19 +16,23 @@ A Google ADK-powered multi-agent AI system that provides intelligent venue recom
 
 **Event Timeline:**
 
-![Events](docs/screenshots/events.png)
+![Events](screenshots/events.png)
 
 **Function Call to Yelp API:**
 
-![Function Call](docs/screenshots/function_call.png)
+![Function Call](screenshots/function_call.png)
 
 **Function Response from Yelp:**
 
-![Function Response](docs/screenshots/function_response.png)
+![Function Response](screenshots/function_response.png)
 
 **Agent Response with Recommendations:**
 
-![Agent Response](docs/screenshots/agent_response.png)
+![Agent Response](screenshots/agent_response.png)
+
+**Memory Recall Across Sessions:**
+
+![Memory Recall](screenshots/memory_recall.png)
 
 ## Quick Start
 
@@ -65,8 +70,7 @@ GEMINI_MODEL=gemini-2.5-flash-lite # Optional
 **Option 2: Using Application Default Credentials (ADC) with Vertex AI**
 ```env
 YELP_API_KEY=your_actual_yelp_api_key
-# GOOGLE_API_KEY=  # Comment out or leave empty to use Vertex AI
-VERTEX_PROJECT=your-gcp-project-id  # Required for Vertex AI
+VERTEX_PROJECT=your-gcp-project-id
 VERTEX_LOCATION=europe-west1  # Optional, defaults to europe-west1
 GEMINI_MODEL=gemini-2.5-flash-lite # Optional
 ```
@@ -136,6 +140,7 @@ User (receives personalised recommendations only)
 - **Search Agent**: Queries Yelp API via MCP tool to find businesses
 - **Recommendation Agent**: Analyses results and provides ranked recommendations
 - **Data Flow**: Search Agent finds venues → Recommendation Agent ranks and explains choices → User sees final recommendations
+- **Memory**: Sessions are automatically saved to memory after each interaction, enabling the agent to recall relevant past conversations when processing new queries
 - **Events Compaction**: Summarises earlier conversation turns to enable longer conversations without hitting token limits. This saves costs, improves performance, and helps the agent stay focused on what's most important.
 
 ### Technology Stack
@@ -162,19 +167,18 @@ User (receives personalised recommendations only)
 
 ```
 venue-recommendation-agent/
-├── docs/
-│   └── screenshots/         # Demo screenshots
+├── screenshots/                     # Demo screenshots
 ├── src/
 │   ├── venue_recommendation_agent/  # Multi-agent system (Google ADK)
-│   │   ├── agent.py         # Root agent + MCP setup + web server
+│   │   ├── agent.py                 # Root agent + MCP setup + web server
 │   │   ├── search_agent.py
 │   │   ├── recommendation_agent.py
 │   │   └── prompts/
-│   ├── mcp_server/          # FastMCP server
-│   │   ├── server.py        # MCP server + tool registration
-│   │   ├── exceptions.py    # Yelp API exceptions
-│   │   └── yelp/            # Yelp API client
-│   └── config.py            # Configuration and environment settings
+│   ├── mcp_server/                  # FastMCP server
+│   │   ├── server.py                # MCP server + tool registration
+│   │   ├── exceptions.py            # Yelp API exceptions
+│   │   └── yelp/                    # Yelp API client
+│   └── config.py                    # Configuration and environment settings
 ├── tests/
 ├── .env.example
 ├── pyproject.toml

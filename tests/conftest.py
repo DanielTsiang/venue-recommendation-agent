@@ -1,9 +1,24 @@
 """Pytest configuration and shared fixtures."""
 
 import logging
+import os
 
 import pytest
 from dotenv import load_dotenv
+from google.adk.memory.base_memory_service import SearchMemoryResponse
+from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
+
+if "YELP_API_KEY" not in os.environ:
+    os.environ["YELP_API_KEY"] = "test_yelp_api_key_for_unit_tests"
+
+from src.mcp_server.yelp.client import YelpClient
+from src.mcp_server.yelp.models import (
+    Business,
+    Category,
+    Coordinates,
+    Location,
+    SearchResponse,
+)
 
 # Load environment variables from .env file for integration tests
 load_dotenv()
@@ -59,8 +74,6 @@ def mock_yelp_api_key(request, mocker):
 @pytest.fixture
 def yelp_client():
     """Create a YelpClient instance for testing."""
-    from src.mcp_server.yelp.client import YelpClient
-
     return YelpClient(api_key="test_api_key_123")
 
 
@@ -70,8 +83,6 @@ def mock_yelp_client(mocker):
 
     Returns empty search results by default.
     """
-    from src.mcp_server.yelp.models import SearchResponse
-
     mock_client = mocker.AsyncMock()
     mock_client.__aenter__.return_value = mock_client
     mock_client.__aexit__.return_value = None
@@ -88,8 +99,6 @@ def mock_yelp_client(mocker):
 @pytest.fixture
 def sample_business():
     """Create a sample Business object for testing."""
-    from src.mcp_server.yelp.models import Business, Category, Coordinates, Location
-
     return Business(
         id="test-restaurant-1",
         alias="test-restaurant-london",
@@ -117,6 +126,16 @@ def sample_business():
 @pytest.fixture
 def sample_search_response(sample_business):
     """Create a sample SearchResponse with one business."""
-    from src.mcp_server.yelp.models import SearchResponse
-
     return SearchResponse(businesses=[sample_business], total=1)
+
+
+@pytest.fixture
+def mock_memory_service(mocker):
+    """Create a mocked InMemoryMemoryService."""
+    mock_service = mocker.Mock(spec=InMemoryMemoryService)
+    mock_service.add_session_to_memory = mocker.AsyncMock()
+    mock_service.search_memory = mocker.AsyncMock(
+        return_value=mocker.Mock(memories=[], spec=SearchMemoryResponse)
+    )
+    mock_memory_service._session_events = {"test_app/test_user": {}}
+    return mock_service

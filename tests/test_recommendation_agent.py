@@ -1,6 +1,8 @@
 """Unit tests for Recommendation Agent."""
 
-from src.venue_recommendation_agent.recommendation_agent import create_recommendation_agent
+from src.venue_recommendation_agent.recommendation_agent import (
+    create_recommendation_agent,
+)
 
 
 class TestRecommendationAgent:
@@ -14,8 +16,8 @@ class TestRecommendationAgent:
             create_recommendation_agent()
 
         # Then: Should log creation messages
-        assert "Creating Google ADK RecommendationAgent" in caplog.text
-        assert "Google ADK RecommendationAgent created successfully" in caplog.text
+        assert "Creating Recommendation Agent" in caplog.text
+        assert "Recommendation Agent created successfully" in caplog.text
 
     def test_recommendation_agent_temperature_higher_than_search(self):
         """Test recommendation agent uses higher temperature than search agent."""
