@@ -22,14 +22,14 @@ uv run pytest --cov=src --cov-report=html
 
 ```
 tests/
-├── test_config.py              # Configuration validation
-├── test_yelp_client.py          # Yelp API client
-├── test_search_agent.py         # Search agent
-├── test_recommendation_agent.py # Recommendation agent
+├── test_agent.py                # Root agent wiring
+├── test_config.py               # Configuration validation
 ├── test_mcp_server.py           # MCP server tools
-├── test_memory.py               # Memory functionality
+├── test_recommendation_agent.py # Recommendation agent + memory callback
+├── test_search_agent.py         # Search agent
+├── test_yelp_client.py          # Yelp API client
 ├── integration/
-│   └── test_end_to_end.py      # End-to-end with real APIs
+│   └── test_end_to_end.py       # End-to-end with real APIs
 ├── conftest.py                  # Shared fixtures
 └── README.md
 ```

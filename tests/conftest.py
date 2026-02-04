@@ -8,6 +8,12 @@ from dotenv import load_dotenv
 from google.adk.memory.base_memory_service import SearchMemoryResponse
 from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
 
+# Load environment variables from .env file first (for integration tests).
+# Using override=True ensures .env values take precedence.
+load_dotenv(override=True)
+
+# Only set fallback test key if no real key is configured.
+# This allows unit tests to run without a .env file.
 if "YELP_API_KEY" not in os.environ:
     os.environ["YELP_API_KEY"] = "test_yelp_api_key_for_unit_tests"
 
@@ -19,9 +25,6 @@ from src.mcp_server.yelp.models import (
     Location,
     SearchResponse,
 )
-
-# Load environment variables from .env file for integration tests
-load_dotenv()
 
 
 @pytest.fixture(autouse=True)

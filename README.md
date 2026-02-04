@@ -18,11 +18,11 @@ A Google ADK-powered multi-agent AI system that provides intelligent venue recom
 
 ![Events](screenshots/events.png)
 
-**Function Call to Yelp API:**
+**Search Function Call using Yelp API:**
 
 ![Function Call](screenshots/function_call.png)
 
-**Function Response from Yelp:**
+**Search Function Response from Yelp API:**
 
 ![Function Response](screenshots/function_response.png)
 
@@ -122,24 +122,28 @@ User Query (Web Browser)
     ↓
 Google ADK Web Server
     ↓
-Search Agent (Google ADK + Gemini)
+Recommendation Agent (root, user-facing)
     ↓
-MCP Protocol (stdio)
+    ├── Calls search tool
+    │       ↓
+    │   Search Agent (runs as AgentTool)
+    │       ↓
+    │   MCP Protocol (stdio)
+    │       ↓
+    │   FastMCP Server (subprocess) → Yelp Places API
+    │       ↓
+    │   Search Results (returned to parent)
     ↓
-FastMCP Server (separate process) → Yelp Places API
-    ↓
-Search Results
-    ↓
-Recommendation Agent (Google ADK + Gemini)
+Recommendation Agent analyses results
     ↓
 User (receives personalised recommendations only)
 ```
 
 ### Agent Communication
 
-- **Search Agent**: Queries Yelp API via MCP tool to find businesses
-- **Recommendation Agent**: Analyses results and provides ranked recommendations
-- **Data Flow**: Search Agent finds venues → Recommendation Agent ranks and explains choices → User sees final recommendations
+- **Recommendation Agent**: User-facing root agent that orchestrates the workflow
+- **Search Agent**: Wrapped as an `AgentTool` - queries Yelp API via MCP, output stays internal
+- **Data Flow**: Recommendation Agent calls Search Agent tool → receives venue data → analyses and ranks → presents recommendations
 - **Memory**: Sessions are automatically saved to memory after each interaction, enabling the agent to recall relevant past conversations when processing new queries
 - **Events Compaction**: Summarises earlier conversation turns to enable longer conversations without hitting token limits. This saves costs, improves performance, and helps the agent stay focused on what's most important.
 
@@ -153,14 +157,14 @@ User (receives personalised recommendations only)
 
 ### Why Multi-Agents?
 
-- **Search Agent**:
+- **Recommendation Agent** (root):
+  - User-facing agent with search tool
+  - Higher temperature (0.7) for creative recommendations
+  - Orchestrates workflow and provides final analysis
+- **Search Agent** (wrapped as an agent tool):
   - Has access to `search_yelp_businesses` MCP tool
   - Lower temperature (0.3) for accurate parameter extraction
-  - Retrieval specialist
-- **Recommendation Agent**:
-  - No tools - pure reasoning agent
-  - Higher temperature (0.7) for creative recommendations
-  - Analysis specialist
+  - Output stays internal - only the recommendation agent sees results
 - **Clean separation**: Each agent focuses on what it does best
 
 ## Project Structure

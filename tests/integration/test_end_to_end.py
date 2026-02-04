@@ -4,9 +4,9 @@ import os
 import uuid
 
 import pytest
-from google.adk.agents import SequentialAgent
 from google.adk.runners import InMemoryRunner
 from google.adk.sessions import InMemorySessionService
+from google.adk.tools.agent_tool import AgentTool
 from google.genai import types
 
 from src.config import Settings
@@ -125,36 +125,6 @@ async def test_yelp_client_handles_invalid_location(check_api_keys):
 
 
 @pytest.mark.integration
-def test_sequential_agent_creation_with_mcp_tools(check_api_keys):
-    """Test SequentialAgent can be created with MCP toolset.
-
-    This test requires both YELP_API_KEY and GOOGLE_API_KEY in environment.
-    """
-    # Given: Valid API keys (validated by fixture)
-    # When: MCP toolset is created
-    mcp_toolset = create_mcp_toolset()
-
-    search_agent = create_search_agent(mcp_tools=[mcp_toolset])
-    recommendation_agent = create_recommendation_agent()
-
-    # And: SequentialAgent is created
-    root_agent = SequentialAgent(
-        name="test_workflow",
-        description="Test workflow",
-        sub_agents=[search_agent, recommendation_agent],
-    )
-
-    # Then: Root agent should be properly configured
-    assert root_agent is not None
-    assert root_agent.name == "test_workflow"
-    assert len(root_agent.sub_agents) == 2
-
-    # And: Search agent should have MCP tools, recommendation agent should not
-    assert len(search_agent.tools) > 0
-    assert len(recommendation_agent.tools) == 0
-
-
-@pytest.mark.integration
 async def test_mcp_server_search_tool_real_api_call(check_api_keys):
     """Test search_yelp_businesses MCP tool makes successful real API call.
 
@@ -260,27 +230,25 @@ async def test_yelp_client_retry_on_network_error(check_api_keys, mocker):
 async def test_full_multi_agent_workflow_end_to_end(check_api_keys):
     """Test complete multi-agent workflow from query to recommendations.
 
-    This test verifies the full flow described in README.md:
-    User Query → Search Agent → MCP → Yelp API → Recommendation Agent → Final Output
+    This test verifies the full flow with AgentTool pattern:
+    User Query → Recommendation Agent → Search Agent Tool → MCP → Yelp API → Recommendations
 
     This test requires both YELP_API_KEY and GOOGLE_API_KEY in environment.
     """
-    # Given: Complete multi-agent system with real APIs
+    # Given: Complete multi-agent system with AgentTool pattern
     # Create MCP toolset for search agent
     mcp_toolset = create_mcp_toolset()
 
+    # Create search agent and wrap as AgentTool
     search_agent = create_search_agent(mcp_tools=[mcp_toolset])
-    recommendation_agent = create_recommendation_agent()
+    search_agent_tool = AgentTool(agent=search_agent)
 
-    sequential_agent = SequentialAgent(
-        name="test_full_workflow",
-        description="Test full recommendation workflow",
-        sub_agents=[search_agent, recommendation_agent],
-    )
+    # Create recommendation agent with search agent as tool
+    recommendation_agent = create_recommendation_agent(tools=[search_agent_tool])
 
     # Create session service and runner
     session_service = InMemorySessionService()
-    runner = InMemoryRunner(agent=sequential_agent)
+    runner = InMemoryRunner(agent=recommendation_agent)
     runner.session_service = session_service
 
     # Create session
@@ -295,7 +263,7 @@ async def test_full_multi_agent_workflow_end_to_end(check_api_keys):
 
     user_message = types.Content(role="user", parts=[types.Part(text=user_query)])
 
-    # Run through the sequential agent workflow
+    # Run through the recommendation agent workflow
     response_parts = []
     async for event in runner.run_async(
         user_id=user_id, session_id=session_id, new_message=user_message
@@ -306,8 +274,8 @@ async def test_full_multi_agent_workflow_end_to_end(check_api_keys):
                 if part.text:
                     response_parts.append(part.text)
 
-    # Then: Should have received responses from agents
-    assert len(response_parts) > 0, "No responses from agents"
+    # Then: Should have received responses from recommendation agent
+    assert len(response_parts) > 0, "No responses from agent"
 
     # And: Final response should contain recommendation-related content
     final_response = " ".join(response_parts)
@@ -378,11 +346,12 @@ async def test_search_agent_calls_yelp_via_mcp(check_api_keys):
         "search" in tool.lower() or "yelp" in tool.lower() for tool in tool_calls_made
     ), f"Expected Yelp search tool call, got: {tool_calls_made}"
 
-    # And: Search agent should NOT output text (suppressed by callback)
-    # Text suppression ensures clean UI - only tool calls and final recommendations visible
+    # And: Search agent outputs text.
+    # When run as a tool, output stays internal to parent agent.
+    # When run standalone (as in this test), it outputs normally.
     assert (
-        len(search_results) == 0
-    ), f"Search agent should not output text (callback suppresses it), got: {search_results}"
+        len(search_results) > 0
+    ), "Search agent should output results when run standalone"
 
 
 @pytest.mark.integration
@@ -390,14 +359,14 @@ async def test_recommendation_agent_analyses_business_data(check_api_keys):
     """Test Recommendation Agent analyses Yelp business data.
 
     This test verifies the Recommendation Agent can:
-    1. Receive business data from session state (simulating Search Agent output)
+    1. Receive business data via tool call (simulated via message)
     2. Analyse ratings, reviews, prices
     3. Provide ranked recommendations with reasoning
 
     This test requires GOOGLE_API_KEY in environment.
     """
-    # Given: Recommendation agent
-    recommendation_agent = create_recommendation_agent()
+    # Given: Recommendation agent (without search tool for this isolated test)
+    recommendation_agent = create_recommendation_agent(tools=[])
 
     # Create session service and runner
     session_service = InMemorySessionService()
@@ -411,8 +380,8 @@ async def test_recommendation_agent_analyses_business_data(check_api_keys):
         app_name=runner.app_name, user_id=user_id, session_id=session_id
     )
 
-    # And: Sample business data (simulating Search Agent output)
-    business_data = """I found 3 Italian restaurants in Shoreditch:
+    # And: Sample business data (simulating data returned from search agent tool)
+    business_data = """Here are the search results for Italian restaurants in Shoreditch:
 
 1. Pizza Paradise
    - Rating: 4.5/5 (120 reviews)
@@ -430,18 +399,15 @@ async def test_recommendation_agent_analyses_business_data(check_api_keys):
    - Rating: 4.8/5 (200 reviews)
    - Price: ££££
    - Distance: 0.8 miles
-   - Address: 10 Park Lane, Shoreditch"""
+   - Address: 10 Park Lane, Shoreditch
 
-    # User asks for recommendations
+Please analyse these and provide your recommendations."""
+
+    # User provides the data directly (simulating tool response in context)
     user_message = types.Content(
         role="user",
-        parts=[
-            types.Part(text="Please analyse these and provide your recommendations.")
-        ],
+        parts=[types.Part(text=business_data)],
     )
-
-    # Populate state with search results (simulating Search Agent's output_key)
-    state_delta = {"SEARCH_RESULTS": business_data}
 
     # When: Recommendation agent analyses the data
     recommendations = []
@@ -449,7 +415,6 @@ async def test_recommendation_agent_analyses_business_data(check_api_keys):
         user_id=user_id,
         session_id=session_id,
         new_message=user_message,
-        state_delta=state_delta,
     ):
         if hasattr(event, "content") and event.content and event.content.parts:
             for part in event.content.parts:

@@ -1,18 +1,24 @@
 """Unit tests for Search Agent."""
 
-from src.venue_recommendation_agent.search_agent import (
-    SEARCH_RESULTS,
-    create_search_agent,
-    suppress_text_output_callback,
-)
+from google.adk.agents import LlmAgent
+
+from src.venue_recommendation_agent.search_agent import create_search_agent
 
 
 class TestSearchAgent:
-    """Test suite for Search Agent-specific functionality."""
+    """Test suite for search_agent.py functionality."""
+
+    def test_create_search_agent_returns_llm_agent(self):
+        """Test create_search_agent returns properly configured LlmAgent."""
+        # When: Search agent is created
+        agent = create_search_agent()
+
+        # Then: Should return LlmAgent with correct properties
+        assert isinstance(agent, LlmAgent)
+        assert agent.name == "search"
 
     def test_create_search_agent_logs_creation(self, caplog):
         """Test create_search_agent logs agent creation."""
-        # Given: Mocked settings (via autouse fixture)
         # When: Search agent is created
         with caplog.at_level("INFO"):
             create_search_agent()
@@ -21,136 +27,53 @@ class TestSearchAgent:
         assert "Creating Search Agent" in caplog.text
         assert "Search Agent created successfully" in caplog.text
 
-    def test_create_search_agent_has_callback(self):
-        """Test create_search_agent sets after_model_callback."""
-        # Given: Mocked settings (via autouse fixture)
+    def test_search_agent_uses_low_temperature(self):
+        """Test search agent uses low temperature for deterministic parsing."""
         # When: Search agent is created
         agent = create_search_agent()
 
-        # Then: Should have after_model_callback set to suppress function
-        assert agent.after_model_callback == suppress_text_output_callback
+        # Then: Should use low temperature for accurate parameter extraction
+        assert agent.generate_content_config.temperature == 0.3
+        assert agent.generate_content_config.top_p == 0.9
+        assert agent.generate_content_config.max_output_tokens == 1024
 
+    def test_search_agent_configures_retry_options(self):
+        """Test search agent configures Google API retry options."""
+        # When: Search agent is created
+        agent = create_search_agent()
 
-class TestSuppressTextOutputCallback:
-    """Test suite for suppress_text_output_callback function."""
+        # Then: Should have retry configuration
+        http_options = agent.generate_content_config.http_options
+        assert http_options is not None
+        assert http_options.retry_options is not None
+        assert http_options.retry_options.attempts == 3
+        assert http_options.retry_options.initial_delay == 1.0
+        assert http_options.retry_options.max_delay == 10.0
+        assert 429 in http_options.retry_options.http_status_codes
+        assert 500 in http_options.retry_options.http_status_codes
 
-    def test_suppress_text_output_filters_text_parts_and_updates_state(self, mocker):
-        """Test callback removes text parts, preserves function calls, and updates state."""
-        # Given: Mock LLM response with both text and function_call parts
-        mock_text_part = mocker.Mock()
-        mock_text_part.text = "This is some text"
-
-        mock_function_part = mocker.Mock()
-        mock_function_part.text = None
-
-        mock_content = mocker.Mock()
-        mock_content.parts = [mock_text_part, mock_function_part]
-
-        mock_llm_response = mocker.Mock()
-        mock_llm_response.content = mock_content
-
-        mock_callback_context = mocker.Mock()
-        mock_callback_context.state = mocker.Mock()
-
-        # When: Callback is invoked
-        suppress_text_output_callback(mock_llm_response, mock_callback_context)
-
-        # Then: Should update state with text content
-        mock_callback_context.state.update.assert_called_once_with(
-            {SEARCH_RESULTS: "This is some text"}
+    def test_search_agent_uses_custom_model(self, mocker):
+        """Test search agent uses custom Gemini model from settings."""
+        # Given: Custom model in settings
+        mocker.patch(
+            "src.venue_recommendation_agent.search_agent.settings.gemini_model",
+            "gemini-2.5-flash-lite",
         )
-        # And should filter out text parts (only function call remains)
-        assert len(mock_content.parts) == 1
-        assert mock_content.parts[0] == mock_function_part
 
-    def test_suppress_text_output_handles_none_response(self, mocker):
-        """Test callback handles None llm_response gracefully."""
-        # Given: None LLM response
-        mock_callback_context = mocker.Mock()
+        # When: Search agent is created
+        agent = create_search_agent()
 
-        # When: Callback is invoked
-        # Then: Should not raise error
-        suppress_text_output_callback(None, mock_callback_context)
+        # Then: Should use custom model
+        assert agent.model == "gemini-2.5-flash-lite"
 
-    def test_suppress_text_output_handles_no_content(self, mocker):
-        """Test callback handles llm_response without content attribute."""
-        # Given: Mock response without content
-        mock_llm_response = mocker.Mock()
-        mock_llm_response.content = None
+    def test_search_agent_accepts_mcp_tools(self, mocker):
+        """Test search agent accepts MCP tools parameter."""
+        # Given: Mock MCP tool
+        mock_tool = mocker.Mock()
 
-        mock_callback_context = mocker.Mock()
+        # When: Search agent is created with MCP tools
+        agent = create_search_agent(mcp_tools=[mock_tool])
 
-        # When: Callback is invoked
-        # Then: Should not raise error
-        suppress_text_output_callback(mock_llm_response, mock_callback_context)
-
-    def test_suppress_text_output_handles_no_parts(self, mocker):
-        """Test callback handles content without parts attribute."""
-        # Given: Mock content without parts
-        mock_content = mocker.Mock()
-        mock_content.parts = None
-
-        mock_llm_response = mocker.Mock()
-        mock_llm_response.content = mock_content
-
-        mock_callback_context = mocker.Mock()
-
-        # When: Callback is invoked
-        # Then: Should not raise error
-        suppress_text_output_callback(mock_llm_response, mock_callback_context)
-
-    def test_suppress_text_output_combines_multiple_text_parts(self, mocker):
-        """Test callback combines multiple text parts into single state entry."""
-        # Given: Mock response with multiple text parts
-        mock_text_part1 = mocker.Mock()
-        mock_text_part1.text = "First text"
-
-        mock_text_part2 = mocker.Mock()
-        mock_text_part2.text = "Second text"
-
-        mock_function_part = mocker.Mock()
-        mock_function_part.text = None
-
-        mock_content = mocker.Mock()
-        mock_content.parts = [mock_text_part1, mock_text_part2, mock_function_part]
-
-        mock_llm_response = mocker.Mock()
-        mock_llm_response.content = mock_content
-
-        mock_callback_context = mocker.Mock()
-        mock_callback_context.state = mocker.Mock()
-
-        # When: Callback is invoked
-        suppress_text_output_callback(mock_llm_response, mock_callback_context)
-
-        # Then: Should combine texts with newline and update state
-        mock_callback_context.state.update.assert_called_once_with(
-            {SEARCH_RESULTS: "First text\nSecond text"}
-        )
-        # And should filter out all text parts
-        assert len(mock_content.parts) == 1
-        assert mock_content.parts[0] == mock_function_part
-
-    def test_suppress_text_output_handles_only_function_calls(self, mocker):
-        """Test callback handles response with no text parts (only function calls)."""
-        # Given: Mock response with only function call parts
-        mock_function_part = mocker.Mock()
-        mock_function_part.text = None
-
-        mock_content = mocker.Mock()
-        mock_content.parts = [mock_function_part]
-
-        mock_llm_response = mocker.Mock()
-        mock_llm_response.content = mock_content
-
-        mock_callback_context = mocker.Mock()
-        mock_callback_context.state = mocker.Mock()
-
-        # When: Callback is invoked
-        suppress_text_output_callback(mock_llm_response, mock_callback_context)
-
-        # Then: Should not update state (no text to save)
-        mock_callback_context.state.update.assert_not_called()
-        # And parts should remain unchanged
-        assert len(mock_content.parts) == 1
-        assert mock_content.parts[0] == mock_function_part
+        # Then: Should only have the MCP tool (no memory tool)
+        assert len(agent.tools) == 1
+        assert agent.tools[0] == mock_tool
