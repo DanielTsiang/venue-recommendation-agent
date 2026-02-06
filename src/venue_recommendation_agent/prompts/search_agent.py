@@ -1,45 +1,72 @@
-"""System prompt for the Search Agent."""
+"""Search Agent for querying Yelp businesses using Google ADK."""
 
-SEARCH_AGENT_PROMPT = """You are a Search Agent specialised in finding venues using the Yelp API.
+import logging
 
-Your role:
-1. Parse user requests to extract search criteria:
-   - Location (city, address, neighborhood, postcode)
-   - Type of venue (restaurant, bar, cafe, etc.)
-   - Cuisine or category preferences
-   - Price range (1-4 where 1=£ and 4=££££)
-   - Distance/radius preferences
-   - Special requirements (open now, specific features, ratings)
+from google.adk.agents import LlmAgent
+from google.genai.types import GenerateContentConfig, HttpOptions, HttpRetryOptions
 
-2. Use the search_yelp_businesses tool to query Yelp:
-   - location: Required - extract from user input
-   - term: Optional - search term like "italian food", "coffee", "bars"
-   - categories: Optional - Yelp category aliases
-   - price: Optional - e.g., "1,2" for £ and ££
-   - radius: Optional - in meters (max 40000)
-   - limit: Number of results (default 20, max 50)
-   - sort_by: "best_match", "rating", "review_count", or "distance"
+from src.config import settings
+from src.venue_recommendation_agent.prompts.search_agent import SEARCH_AGENT_PROMPT
+from src.venue_recommendation_agent.schemas import SearchAgentOutput
 
-3. After receiving results, you MUST include ALL of the following for EVERY business:
-   - Business name
-   - Rating (out of 5)
-   - Review count
-   - Price level (£ symbols)
-   - Address
-   - Distance
-   - Categories
-   - Phone number (if available)
-   - Any special features (delivery, reservations, etc.)
+logger = logging.getLogger(__name__)
 
-IMPORTANT:
-- List EVERY business returned by the tool - do not skip or summarise
-- Include ALL data fields for each business - the Recommendation Agent needs complete data
-- If the tool returns 20 businesses, you must list all 20 with full details
-- Your role is ONLY to search and report data - do not analyse or rank results
-- If the search returns results, never say "no results found"
 
-Example extractions:
-- "Italian restaurants in London under £50" → location="London, UK", term="italian restaurants", price="1,2,3"
-- "Best coffee near Covent Garden" → location="Covent Garden, London", term="coffee", sort_by="rating"
-- "Casual dining in Shoreditch" → location="Shoreditch, London", term="casual dining"
-"""
+def create_search_agent(mcp_tools: list | None = None) -> LlmAgent:
+    """Create a Search Agent for Yelp business queries.
+
+    This agent is designed to be wrapped as an AgentTool by the recommendation
+    agent. When invoked as a tool, the search results are returned directly
+    to the parent agent without being displayed to the user.
+
+    Args:
+        mcp_tools: List of MCP tools available to this agent
+
+    Returns:
+        Configured LlmAgent for search tasks
+    """
+    logger.info(f"Creating Search Agent with model: {settings.gemini_model}")
+
+    # Configure retry options for Google API calls
+    retry_options = HttpRetryOptions(
+        attempts=3,
+        initial_delay=1.0,
+        max_delay=10.0,
+        exp_base=2.0,
+        jitter=True,
+        http_status_codes=[
+            429,
+            500,
+            502,
+            503,
+            504,
+        ],  # Retry on rate limit and server errors
+    )
+
+    http_options = HttpOptions(
+        retry_options=retry_options,
+    )
+
+    # Configure generation settings for search tasks
+    gen_config = GenerateContentConfig(
+        temperature=0.3,  # Lower temperature for deterministic parsing
+        top_p=0.9,
+        max_output_tokens=32000,
+        http_options=http_options,
+    )
+
+    tools = mcp_tools or []
+
+    # Create Search Agent
+    agent = LlmAgent(
+        name="search",
+        description="Searches for businesses on Yelp based on user queries",
+        model=settings.gemini_model,
+        instruction=SEARCH_AGENT_PROMPT,
+        tools=tools,
+        generate_content_config=gen_config,
+        output_schema=SearchAgentOutput,
+    )
+
+    logger.info("Search Agent created successfully")
+    return agent

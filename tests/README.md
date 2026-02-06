@@ -26,8 +26,10 @@ tests/
 ├── test_config.py               # Configuration validation
 ├── test_mcp_server.py           # MCP server tools
 ├── test_recommendation_agent.py # Recommendation agent + memory callback
+├── test_schemas.py              # Search agent output schemas
 ├── test_search_agent.py         # Search agent
 ├── test_yelp_client.py          # Yelp API client
+├── test_yelp_models.py          # Pydantic models for Yelp API
 ├── integration/
 │   └── test_end_to_end.py       # End-to-end with real APIs
 ├── conftest.py                  # Shared fixtures

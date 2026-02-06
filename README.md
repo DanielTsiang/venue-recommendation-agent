@@ -177,6 +177,7 @@ venue-recommendation-agent/
 │   │   ├── agent.py                 # Root agent + MCP setup + web server
 │   │   ├── search_agent.py
 │   │   ├── recommendation_agent.py
+│   │   ├── schemas.py               # Simplified output schemas for search agent
 │   │   └── prompts/
 │   ├── mcp_server/                  # FastMCP server
 │   │   ├── server.py                # MCP server + tool registration

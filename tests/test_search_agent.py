@@ -2,6 +2,7 @@
 
 from google.adk.agents import LlmAgent
 
+from src.venue_recommendation_agent.schemas import SearchAgentOutput
 from src.venue_recommendation_agent.search_agent import create_search_agent
 
 
@@ -35,7 +36,7 @@ class TestSearchAgent:
         # Then: Should use low temperature for accurate parameter extraction
         assert agent.generate_content_config.temperature == 0.3
         assert agent.generate_content_config.top_p == 0.9
-        assert agent.generate_content_config.max_output_tokens == 1024
+        assert agent.generate_content_config.max_output_tokens == 32000
 
     def test_search_agent_configures_retry_options(self):
         """Test search agent configures Google API retry options."""
@@ -77,3 +78,15 @@ class TestSearchAgent:
         # Then: Should only have the MCP tool (no memory tool)
         assert len(agent.tools) == 1
         assert agent.tools[0] == mock_tool
+
+    def test_search_agent_has_output_schema(self):
+        """Test search agent has SearchResponse as output_schema.
+
+        The output_schema ensures the agent returns structured JSON
+        matching the Yelp API response format.
+        """
+        # When: Search agent is created
+        agent = create_search_agent()
+
+        # Then: Should have SearchAgentOutput as output_schema
+        assert agent.output_schema == SearchAgentOutput

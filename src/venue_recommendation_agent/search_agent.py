@@ -7,6 +7,7 @@ from google.genai.types import GenerateContentConfig, HttpOptions, HttpRetryOpti
 
 from src.config import settings
 from src.venue_recommendation_agent.prompts.search_agent import SEARCH_AGENT_PROMPT
+from src.venue_recommendation_agent.schemas import SearchAgentOutput
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,7 @@ def create_search_agent(mcp_tools: list | None = None) -> LlmAgent:
     gen_config = GenerateContentConfig(
         temperature=0.3,  # Lower temperature for deterministic parsing
         top_p=0.9,
-        max_output_tokens=1024,
+        max_output_tokens=32000,
         http_options=http_options,
     )
 
@@ -64,6 +65,7 @@ def create_search_agent(mcp_tools: list | None = None) -> LlmAgent:
         instruction=SEARCH_AGENT_PROMPT,
         tools=tools,
         generate_content_config=gen_config,
+        output_schema=SearchAgentOutput
     )
 
     logger.info("Search Agent created successfully")

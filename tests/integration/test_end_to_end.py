@@ -1,5 +1,6 @@
 """Integration tests for end-to-end workflow with real API keys."""
 
+import json
 import os
 import uuid
 
@@ -293,15 +294,18 @@ async def test_full_multi_agent_workflow_end_to_end(check_api_keys):
 
 
 @pytest.mark.integration
-async def test_search_agent_calls_yelp_via_mcp(check_api_keys):
-    """Test Search Agent successfully calls Yelp API through MCP protocol.
+async def test_search_agent_calls_yelp_and_returns_valid_json(check_api_keys):
+    """Test Search Agent calls Yelp via MCP and returns valid structured JSON.
 
-    This test verifies the MCP connection flow:
-    Search Agent → MCP Toolset → FastMCP Server → Yelp API
+    This test verifies:
+    1. MCP connection flow: Search Agent → MCP Toolset → FastMCP Server → Yelp API
+    2. The output_schema constraint produces valid JSON
+    3. The JSON is not truncated (common issue with large responses)
+    4. All required fields are present
 
     This test requires both YELP_API_KEY and GOOGLE_API_KEY in environment.
     """
-    # Given: Search agent with MCP toolset
+    # Given: Search agent with MCP toolset and output_schema
     mcp_toolset = create_mcp_toolset()
     search_agent = create_search_agent(mcp_tools=[mcp_toolset])
 
@@ -317,28 +321,25 @@ async def test_search_agent_calls_yelp_via_mcp(check_api_keys):
         app_name=runner.app_name, user_id=user_id, session_id=session_id
     )
 
-    # When: Search agent processes a query requiring Yelp search
-    query = "Search for coffee shops in Camden, London. Return the top 3 results."
-
+    # When: Search agent processes a query
+    query = "Find restaurants in Camden, London"
     user_message = types.Content(role="user", parts=[types.Part(text=query)])
 
-    # Run search agent
+    # Collect tool calls and response parts
     tool_calls_made = []
-    search_results = []
+    response_parts = []
 
     async for event in runner.run_async(
         user_id=user_id, session_id=session_id, new_message=user_message
     ):
-        # Track tool calls
         if hasattr(event, "content") and event.content and event.content.parts:
             for part in event.content.parts:
-                # Check if tool was called
+                # Track tool calls
                 if hasattr(part, "function_call") and part.function_call:
                     tool_calls_made.append(part.function_call.name)
-
-                # Collect search results
+                # Collect text output
                 if part.text:
-                    search_results.append(part.text)
+                    response_parts.append(part.text)
 
     # Then: Search agent should have called the Yelp search tool
     assert len(tool_calls_made) > 0, "Search agent did not call any tools"
@@ -346,12 +347,31 @@ async def test_search_agent_calls_yelp_via_mcp(check_api_keys):
         "search" in tool.lower() or "yelp" in tool.lower() for tool in tool_calls_made
     ), f"Expected Yelp search tool call, got: {tool_calls_made}"
 
-    # And: Search agent outputs text.
-    # When run as a tool, output stays internal to parent agent.
-    # When run standalone (as in this test), it outputs normally.
-    assert (
-        len(search_results) > 0
-    ), "Search agent should output results when run standalone"
+    # And: Should have received JSON response
+    assert len(response_parts) > 0, "No response from search agent"
+    full_response = "".join(response_parts)
+
+    # And: Response should be valid JSON (not truncated)
+    try:
+        parsed = json.loads(full_response)
+
+        # And: Should have businesses array
+        assert "businesses" in parsed, "Response missing 'businesses' field"
+        assert isinstance(parsed["businesses"], list), "'businesses' should be a list"
+
+        # And: If businesses exist, verify structure
+        if len(parsed["businesses"]) > 0:
+            business = parsed["businesses"][0]
+            # Check required fields
+            assert "name" in business, "Business missing 'name'"
+            assert "rating" in business, "Business missing 'rating'"
+
+    except json.JSONDecodeError as e:
+        # If JSON is invalid (e.g., truncated), the test should fail
+        pytest.fail(
+            f"Search agent returned invalid/truncated JSON: {e}\n"
+            f"Response preview: {full_response[:500]}..."
+        )
 
 
 @pytest.mark.integration
